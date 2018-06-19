@@ -41,8 +41,7 @@ type BackoffConfig struct {
 }
 
 func New(options ...BackoffOption) BackoffStrategy {
-	b := BackoffConfig{}
-	b = DefaultStrategy.(BackoffConfig)
+	b := DefaultStrategy.(BackoffConfig)
 	for _, option := range options {
 		option(&b)
 	}
