@@ -15,11 +15,12 @@ var DefaultStrategy BackoffStrategy
 func init() {
 	// DefaultStrategy uses values specified for backoff in
 	// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-	DefaultStrategy = BackoffConfig{
-		maxDelay:  180 * time.Second,
-		baseDelay: 1.0 * time.Second,
-		factor:    1.6,
-		jitter:    0.2,
+	DefaultStrategy = &BackoffConfig{
+		maxDelay:   180 * time.Second,
+		baseDelay:  1.0 * time.Second,
+		resetDelay: 1.0 * time.Hour,
+		factor:     1.6,
+		jitter:     0.2,
 	}
 }
 
@@ -33,23 +34,37 @@ type BackoffConfig struct {
 	// failure.
 	baseDelay time.Duration
 
+	// resetDelay iteration run duration, which if passed starts backoff from scratch.
+	resetDelay time.Duration
+
 	// factor is applied to the backoff after each retry.
 	factor float64
 
 	// jitter provides a range to randomize backoff delays.
 	jitter float64
+
+	retryOffset int
+	lastBackoff time.Duration
+	lastNow     time.Time
 }
 
 func New(options ...BackoffOption) BackoffStrategy {
-	b := DefaultStrategy.(BackoffConfig)
+	b := DefaultStrategy.(*BackoffConfig)
 	for _, option := range options {
-		option(&b)
+		option(b)
 	}
 	return b
 }
 
-func (bc BackoffConfig) Backoff(retries int) time.Duration {
-	if retries == 0 {
+func (bc *BackoffConfig) Backoff(retries int) (offdur time.Duration) {
+	defer func() {
+		bc.lastBackoff = offdur
+		bc.lastNow = time.Now()
+	}()
+
+	retries -= bc.retryOffset
+	if retries == 0 || time.Since(bc.lastNow) >= bc.resetDelay+bc.lastBackoff {
+		bc.retryOffset += retries
 		return bc.baseDelay
 	}
 	backoff, max := float64(bc.baseDelay), float64(bc.maxDelay)
@@ -69,24 +84,41 @@ func (bc BackoffConfig) Backoff(retries int) time.Duration {
 	return time.Duration(backoff)
 }
 
-func WithMaxDelay(md time.Duration) BackoffOption {
+// WithMaxDelay is the upper bound of backoff delay.
+// Default is 180 seconds.
+func WithMaxDelay(d time.Duration) BackoffOption {
 	return func(b *BackoffConfig) {
-		b.maxDelay = md
+		b.maxDelay = d
 	}
 }
 
-func WithBaseDelay(bd time.Duration) BackoffOption {
+// WithBaseDelay is the amount of time to wait before retrying after the first
+// failure. Default is 1 second.
+func WithBaseDelay(d time.Duration) BackoffOption {
 	return func(b *BackoffConfig) {
-		b.baseDelay = bd
+		b.baseDelay = d
 	}
 }
 
+// WithResetDelay is iteration run duration between retry to check,
+// which if passed starts backoff from scratch, i.e. from base delay.
+// Default is 1 hour.
+func WithResetDelay(d time.Duration) BackoffOption {
+	return func(b *BackoffConfig) {
+		b.resetDelay = d
+	}
+}
+
+// WithFactor is applied to the backoff after each retry.
+// Default value is 1.6
 func WithFactor(factor float64) BackoffOption {
 	return func(b *BackoffConfig) {
 		b.factor = factor
 	}
 }
 
+// WithJitter provides a range to randomize backoff delays.
+// Default value is 0.2
 func WithJitter(jitter float64) BackoffOption {
 	return func(b *BackoffConfig) {
 		b.jitter = jitter
