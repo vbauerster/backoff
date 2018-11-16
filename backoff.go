@@ -27,6 +27,8 @@ func init() {
 type BackoffOption func(*BackoffConfig)
 
 type BackoffConfig struct {
+	state
+
 	// maxDelay is the upper bound of backoff delay.
 	maxDelay time.Duration
 
@@ -42,20 +44,22 @@ type BackoffConfig struct {
 
 	// jitter provides a range to randomize backoff delays.
 	jitter float64
+}
 
+type state struct {
 	retryOffset int
 	lastBackoff time.Duration
 	lastNow     time.Time
 }
 
 func New(options ...BackoffOption) BackoffStrategy {
-	b := new(BackoffConfig)
-	g := DefaultStrategy.(*BackoffConfig)
-	*b = *g
+	var b BackoffConfig
+	b = *DefaultStrategy.(*BackoffConfig)
+	b.state = state{}
 	for _, option := range options {
-		option(b)
+		option(&b)
 	}
-	return b
+	return &b
 }
 
 func (bc *BackoffConfig) Backoff(retries int) (offdur time.Duration) {
