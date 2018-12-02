@@ -47,9 +47,10 @@ type BackoffConfig struct {
 }
 
 type state struct {
-	retryOffset int
-	lastBackoff time.Duration
-	lastNow     time.Time
+	count  int
+	reset  int
+	offdur time.Duration
+	iT     time.Time
 }
 
 func New(options ...BackoffOption) BackoffStrategy {
@@ -64,13 +65,17 @@ func New(options ...BackoffOption) BackoffStrategy {
 
 func (bc *BackoffConfig) Backoff(retries int) (offdur time.Duration) {
 	defer func() {
-		bc.lastBackoff = offdur
-		bc.lastNow = time.Now()
+		bc.count++
+		bc.offdur = offdur
+		bc.iT = time.Now()
 	}()
 
-	retries -= bc.retryOffset
-	if retries == 0 || time.Since(bc.lastNow) >= bc.resetDelay+bc.lastBackoff {
-		bc.retryOffset += retries
+	if !bc.iT.IsZero() && time.Since(bc.iT) >= bc.resetDelay+bc.offdur {
+		bc.reset = retries - (retries - bc.count)
+	}
+
+	retries -= bc.reset
+	if retries == 0 {
 		return bc.baseDelay
 	}
 	backoff, max := float64(bc.baseDelay), float64(bc.maxDelay)
