@@ -1,44 +1,48 @@
 # Exponential Backoff
 
 The algorithm extracted from [grpc](https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md) library
-and augmented with functional options. 
+and augmented with functional options.
 
 #### [Example](_example/main.go)
 ```go
-    b := backoff.DefaultStrategy
-    for i := 0; i < 10; i++ {
-        fmt.Println(b.Backoff(i))
-    }
+	for i := 0; i < 5; i++ {
+		d := backoff.DefaultStrategy.Backoff(i)
+		fmt.Printf("%d: %v\n", i, d)
+		time.Sleep(d)
+	}
 
-    b = backoff.New(
-        backoff.WithBaseDelay(2*time.Second),
-        backoff.WithMaxDelay(300*time.Second),
-    )
-    for i := 0; i < 10; i++ {
-        fmt.Println(b.Backoff(i))
-    }
+	b := backoff.New(
+		backoff.WithBaseDelay(2*time.Second),
+		backoff.WithMaxDelay(300*time.Second),
+		backoff.WithResetDelay(10*time.Second),
+	)
+
+	for i := 0; i < 10; i++ {
+		if i > 0 && i%3 == 0 {
+			time.Sleep(11 * time.Second)
+		}
+		d := b.Backoff(i)
+		fmt.Printf("%d: %v\n", i, d)
+		time.Sleep(d)
+	}
 ```
 
 ### Output
 ```
-1s
-1.390532561s
-2.520493227s
-4.805583273s
-5.899954303s
-9.598781269s
-18.465925964s
-31.532035436s
-36.411486205s
-55.91100951s
-2s
-3.591917239s
-5.84878073s
-9.201170154s
-11.855413451s
-21.331910845s
-36.474201007s
-59.198877125s
-1m18.302021863s
-2m43.010456169s
+0: 1s
+1: 1.861015984s
+2: 2.894111824s
+3: 3.529445921s
+4: 5.502962438s
+0: 2s
+1: 2.716279239s
+2: 5.724163401s
+3: 2s
+4: 3.469467053s
+5: 4.197908886s
+6: 2s
+7: 3.479944348s
+8: 5.800812833s
+9: 2s
+
 ```
