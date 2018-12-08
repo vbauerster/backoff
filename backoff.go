@@ -1,27 +1,12 @@
 package backoff
 
 import (
+	"math/rand"
 	"time"
-
-	"github.com/vbauerster/backoff/saferand"
 )
 
 type BackoffStrategy interface {
 	Backoff(retries int) time.Duration
-}
-
-var DefaultStrategy BackoffStrategy
-
-func init() {
-	// DefaultStrategy uses values specified for backoff in
-	// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-	DefaultStrategy = &BackoffConfig{
-		maxDelay:   180 * time.Second,
-		baseDelay:  1.0 * time.Second,
-		resetDelay: 1.0 * time.Hour,
-		factor:     1.6,
-		jitter:     0.2,
-	}
 }
 
 type BackoffOption func(*BackoffConfig)
@@ -44,6 +29,8 @@ type BackoffConfig struct {
 
 	// jitter provides a range to randomize backoff delays.
 	jitter float64
+
+	rand *rand.Rand
 }
 
 type state struct {
@@ -53,13 +40,23 @@ type state struct {
 	iT     time.Time
 }
 
+// New initialises BackoffStrategy, which is NOT safe for concurrent use,
+// as it stores some state to keep track of when to reset.
+// For concurrent use, call New for each goroutine.
 func New(options ...BackoffOption) BackoffStrategy {
-	b := *DefaultStrategy.(*BackoffConfig)
-	b.state = state{}
-	for _, option := range options {
-		option(&b)
+	b := &BackoffConfig{
+		maxDelay:   180 * time.Second,
+		baseDelay:  1.0 * time.Second,
+		resetDelay: 1.0 * time.Hour,
+		factor:     1.6,
+		jitter:     0.2,
+		// not shared, not concurrent safe *rand.Rand instance
+		rand: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	return &b
+	for _, option := range options {
+		option(b)
+	}
+	return b
 }
 
 func (bc *BackoffConfig) Backoff(retries int) (offdur time.Duration) {
@@ -87,7 +84,7 @@ func (bc *BackoffConfig) Backoff(retries int) (offdur time.Duration) {
 	}
 	// Randomize backoff delays so that if a cluster of requests start at
 	// the same time, they won't operate in lockstep.
-	backoff *= 1 + bc.jitter*(saferand.Float64()*2-1)
+	backoff *= 1 + bc.jitter*(bc.rand.Float64()*2-1)
 	if backoff < 0 {
 		return 0
 	}
@@ -132,5 +129,16 @@ func WithFactor(factor float64) BackoffOption {
 func WithJitter(jitter float64) BackoffOption {
 	return func(b *BackoffConfig) {
 		b.jitter = jitter
+	}
+}
+
+// WithCustomRand override default *rand.Rand which is
+// seeded with rand.NewSource(time.Now().UnixNano()).
+func WithCustomRand(rand *rand.Rand) BackoffOption {
+	return func(b *BackoffConfig) {
+		if rand == nil {
+			return
+		}
+		b.rand = rand
 	}
 }
