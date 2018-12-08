@@ -8,15 +8,16 @@ import (
 )
 
 func main() {
+	b := backoff.New()
 	for i := 0; i < 5; i++ {
-		d := backoff.DefaultStrategy.Backoff(i)
+		d := b.Backoff(i)
 		fmt.Printf("%d: %v\n", i, d)
 		time.Sleep(d)
 	}
 
 	fmt.Println()
 
-	b := backoff.New(
+	b = backoff.New(
 		backoff.WithMaxDelay(300*time.Second),
 		backoff.WithResetDelay(10*time.Second),
 	)
