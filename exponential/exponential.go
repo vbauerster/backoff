@@ -43,7 +43,7 @@ func New(options ...Option) backoff.Strategy {
 	return eb
 }
 
-func (eb Exponential) NextAttempt(attempt int) time.Duration {
+func (eb Exponential) Pause(attempt int) time.Duration {
 	if attempt == 0 {
 		return eb.baseDelay
 	}
