@@ -72,6 +72,7 @@ func WithMaxDelay(d time.Duration) Option {
 	}
 }
 
+// WithBaseDelay is the amount of time to wait before retrying after the first
 // failure. Default is 1 second.
 func WithBaseDelay(d time.Duration) Option {
 	return func(s *strategy) {
