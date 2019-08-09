@@ -27,6 +27,7 @@ func Retry(ctx context.Context, strategy Strategy, reset time.Duration, fn Func)
 	var attempt int
 	var count int
 	timer := time.NewTimer(0)
+	defer timer.Stop()
 
 quit:
 	for {
@@ -43,7 +44,6 @@ quit:
 			attempt++
 			timer.Reset(strategy.Pause(attempt))
 		case <-ctx.Done():
-			timer.Stop()
 			return ctx.Err()
 		}
 	}
