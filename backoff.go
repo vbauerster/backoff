@@ -6,11 +6,12 @@ import (
 )
 
 // Func represents functions that can be retried.
-type Func func(attempt int, now time.Time) (retry bool, err error)
+type Func func(count int, now time.Time) (retry bool, err error)
 
 // Strategy is a backoff methodology for retrying an operation.
 type Strategy interface {
 	// Pause returns the duration of the next pause, according to attempt number.
+	// Attempt = 1 indicates that strategy should reset to its initial state.
 	Pause(attempt int) time.Duration
 }
 
@@ -24,19 +25,21 @@ func Retry(ctx context.Context, strategy Strategy, reset time.Duration, fn Func)
 	var err error
 	var cont bool
 	var attempt int
+	var count int
 	timer := time.NewTimer(0)
 
 quit:
 	for {
 		select {
 		case now := <-timer.C:
-			cont, err = fn(attempt, now)
+			cont, err = fn(count, now)
 			if !cont || err == nil {
 				break quit
 			}
 			if time.Since(now) >= reset {
 				attempt = 0
 			}
+			count++
 			attempt++
 			timer.Reset(strategy.Pause(attempt))
 		case <-ctx.Done():
