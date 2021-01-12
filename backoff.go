@@ -11,7 +11,6 @@ type Func func(count int, now time.Time) (retry bool, err error)
 // Strategy is a backoff methodology for retrying an operation.
 type Strategy interface {
 	// Pause returns the duration of the next pause, according to attempt number.
-	// Attempt = 1 indicates that strategy should reset to its initial state.
 	Pause(attempt int) time.Duration
 }
 
@@ -40,9 +39,9 @@ quit:
 			if time.Since(now) >= reset {
 				attempt = 0
 			}
+			timer.Reset(strategy.Pause(attempt))
 			count++
 			attempt++
-			timer.Reset(strategy.Pause(attempt))
 		case <-ctx.Done():
 			return ctx.Err()
 		}
