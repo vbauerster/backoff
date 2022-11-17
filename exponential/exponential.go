@@ -95,14 +95,3 @@ func WithJitter(jitter float64) Option {
 		s.jitter = jitter
 	}
 }
-
-// WithCustomRand override default *rand.Rand which is
-// seeded with rand.NewSource(time.Now().UnixNano()).
-func WithCustomRand(rand *rand.Rand) Option {
-	return func(s *strategy) {
-		if rand == nil {
-			return
-		}
-		s.rand = rand
-	}
-}
