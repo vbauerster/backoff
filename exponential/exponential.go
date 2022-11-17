@@ -23,20 +23,7 @@ type strategy struct {
 	// jitter provides a range to randomize backoff delays.
 	jitter float64
 
-	reset *reset
-	rand  *rand.Rand
-}
-
-type reset struct {
-	attempt int
-	d       time.Duration
-}
-
-func (s *reset) check(attempt int, ran time.Duration) int {
-	if ran >= s.d {
-		s.attempt = attempt
-	}
-	return attempt - s.attempt
+	rand *rand.Rand
 }
 
 // New initializes exponential backoff.Strategy.
@@ -49,7 +36,6 @@ func New(options ...Option) backoff.Strategy {
 		factor:    1.6,
 		jitter:    0.2,
 		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
-		reset:     &reset{0, time.Hour},
 	}
 	for _, option := range options {
 		option(&s)
@@ -57,8 +43,7 @@ func New(options ...Option) backoff.Strategy {
 	return s
 }
 
-func (s strategy) Pause(attempt int, ran time.Duration) time.Duration {
-	attempt = s.reset.check(attempt, ran)
+func (s strategy) Pause(attempt uint) time.Duration {
 	if attempt == 0 {
 		return s.baseDelay
 	}
@@ -92,14 +77,6 @@ func WithMaxDelay(d time.Duration) Option {
 func WithBaseDelay(d time.Duration) Option {
 	return func(s *strategy) {
 		s.baseDelay = d
-	}
-}
-
-// WithReset resets backoff strategy if previous backoff.Func ran
-// duration has exceeded provided duration. Default is 1 hour.
-func WithReset(d time.Duration) Option {
-	return func(s *strategy) {
-		s.reset.d = d
 	}
 }
 
