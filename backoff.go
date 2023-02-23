@@ -15,10 +15,9 @@ type Strategy interface {
 	Pause(attempt uint) time.Duration
 }
 
-// Retry keeps trying the fn until it returns false, or no error is
-// returned. It will pause between retries, according to backoff
-// strategy.
-func Retry(ctx context.Context, strategy Strategy, fn Func) (err error) {
+// RetryWithContext keeps trying the fn until it returns false or no error.
+// It will pause between retries according to backoff strategy.
+func RetryWithContext(ctx context.Context, strategy Strategy, fn Func) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -39,4 +38,10 @@ func Retry(ctx context.Context, strategy Strategy, fn Func) (err error) {
 			return ctx.Err()
 		}
 	}
+}
+
+// Retry keeps trying the fn until it returns false or no error.
+// It will pause between retries according to backoff strategy.
+func Retry(strategy Strategy, fn Func) error {
+	return RetryWithContext(context.Background(), strategy, fn)
 }
