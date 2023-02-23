@@ -22,23 +22,20 @@ func Retry(ctx context.Context, strategy Strategy, fn Func) (err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var cont bool
-	var attempt, reset uint32
+	var attempt, reset uint
 	cb := func() { reset = attempt }
-	timer := time.NewTimer(0)
-	defer timer.Stop()
 
 	for {
+		cont, err := fn(attempt, cb)
+		if !cont || err == nil {
+			return err
+		}
+		timer := time.NewTimer(strategy.Pause(attempt - reset))
 		select {
 		case <-timer.C:
-			cont, err = fn(uint(attempt+1), cb)
-			if !cont || err == nil {
-				return
-			}
-			pause := strategy.Pause(uint(attempt - reset))
-			timer.Reset(pause)
 			attempt++
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
 		}
 	}
