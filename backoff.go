@@ -17,6 +17,8 @@ type Strategy interface {
 
 // RetryWithContext keeps trying the fn until it returns false or no error.
 // It will pause between retries according to backoff strategy.
+// If context is canceled during a pause context error is returned without
+// re-calling provided fn.
 func RetryWithContext(ctx context.Context, strategy Strategy, fn Func) error {
 	if ctx == nil {
 		ctx = context.Background()
