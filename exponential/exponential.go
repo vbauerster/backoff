@@ -2,14 +2,13 @@ package exponential
 
 import (
 	"math/rand"
+	"sync/atomic"
 	"time"
-
-	"github.com/vbauerster/backoff"
 )
 
-type Option func(*strategy)
+type Option func(*BackoffStrategy)
 
-type strategy struct {
+type BackoffStrategy struct {
 	// maxDelay is the upper bound of backoff delay.
 	maxDelay time.Duration
 
@@ -24,13 +23,15 @@ type strategy struct {
 	jitter float64
 
 	rand *rand.Rand
+
+	count atomic.Uint32
 }
 
 // New initializes exponential backoff.Strategy.
 // It implements exponential backoff algorithm as defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-func New(options ...Option) backoff.Strategy {
-	s := strategy{
+func New(options ...Option) *BackoffStrategy {
+	strategy := &BackoffStrategy{
 		maxDelay:  180 * time.Second,
 		baseDelay: 1.0 * time.Second,
 		factor:    1.6,
@@ -38,19 +39,21 @@ func New(options ...Option) backoff.Strategy {
 		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	for _, option := range options {
-		option(&s)
+		option(strategy)
 	}
-	return s
+	return strategy
 }
 
-func (s strategy) Pause(attempt uint) time.Duration {
-	if attempt == 0 {
+func (s *BackoffStrategy) Pause() time.Duration {
+	count := s.count.Load()
+	defer s.count.Add(1)
+	if count == 0 {
 		return s.baseDelay
 	}
 	backoff, max := float64(s.baseDelay), float64(s.maxDelay)
-	for backoff < max && attempt > 0 {
+	for backoff < max && count > 0 {
 		backoff *= s.factor
-		attempt--
+		count--
 	}
 	if backoff > max {
 		backoff = max
@@ -64,10 +67,14 @@ func (s strategy) Pause(attempt uint) time.Duration {
 	return time.Duration(backoff)
 }
 
+func (s *BackoffStrategy) Reset() {
+	s.count.Store(0)
+}
+
 // WithMaxDelay is the upper bound of backoff delay.
 // Default is 180 seconds.
 func WithMaxDelay(d time.Duration) Option {
-	return func(s *strategy) {
+	return func(s *BackoffStrategy) {
 		s.maxDelay = d
 	}
 }
@@ -75,7 +82,7 @@ func WithMaxDelay(d time.Duration) Option {
 // WithBaseDelay is the amount of time to wait before retrying after the first
 // failure. Default is 1 second.
 func WithBaseDelay(d time.Duration) Option {
-	return func(s *strategy) {
+	return func(s *BackoffStrategy) {
 		s.baseDelay = d
 	}
 }
@@ -83,7 +90,7 @@ func WithBaseDelay(d time.Duration) Option {
 // WithFactor is applied to the backoff after each retry.
 // Default value is 1.6
 func WithFactor(factor float64) Option {
-	return func(s *strategy) {
+	return func(s *BackoffStrategy) {
 		s.factor = factor
 	}
 }
@@ -91,7 +98,7 @@ func WithFactor(factor float64) Option {
 // WithJitter provides a range to randomize backoff delays.
 // Default value is 0.2
 func WithJitter(jitter float64) Option {
-	return func(s *strategy) {
+	return func(s *BackoffStrategy) {
 		s.jitter = jitter
 	}
 }

@@ -3,16 +3,23 @@ package backoff
 import (
 	"context"
 	"time"
+
+	"github.com/vbauerster/backoff/exponential"
 )
 
-// Func represents functions that can be retried,
-// reset param shouldn't be called in new goroutine.
-type Func func(attempt uint, reset func()) (retry bool, err error)
+// DefaultStrategy is default Strategy interface implementation.
+var DefaultStrategy Strategy = exponential.New()
+
+// Func represents functions that can be retried.
+// Initial attempt is zero.
+type Func func(attempt uint) (retry bool, err error)
 
 // Strategy is a backoff methodology for retrying an operation.
 type Strategy interface {
-	// Pause returns duration of the next pause, according to the attempt number.
-	Pause(attempt uint) time.Duration
+	// Pause returns duration of the next pause.
+	Pause() time.Duration
+	// Reset so that the next Pause returns BaseDelay duration.
+	Reset()
 }
 
 // RetryWithContext keeps trying the fn until it returns false or no error.
@@ -23,15 +30,13 @@ func RetryWithContext(ctx context.Context, strategy Strategy, fn Func) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var attempt, reset uint
-	cb := func() { reset = attempt }
-
+	var attempt uint
 	for {
-		cont, err := fn(attempt, cb)
+		cont, err := fn(attempt)
 		if !cont || err == nil {
 			return err
 		}
-		timer := time.NewTimer(strategy.Pause(attempt - reset))
+		timer := time.NewTimer(strategy.Pause())
 		select {
 		case <-timer.C:
 			attempt++
